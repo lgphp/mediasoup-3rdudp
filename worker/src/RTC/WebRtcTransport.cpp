@@ -246,20 +246,46 @@ namespace RTC {
                 this->udpSockets[udpSocket] = udpIp; // TODO
                 this->iceCandidates.emplace_back(udpSocket, icePriority);
 
-
                 //发送一个 ping 包
                 auto* packet = new uint8_t[4];
                 struct sockaddr_in udpaddr;
-                uv_ip4_addr(udpIp.c_str(), udpPort, &udpaddr);
+                int family = Utils::IP::GetFamily(udpIp);
+                int err ; 
+                switch (family)
+                {
+                    case AF_INET:
+                    {
+                        err = uv_ip4_addr(udpIp.c_str(), udpPort, &udpaddr);
 
-                auto* cb = new std::function<void(bool)>([&](bool sent) { 
-                   MS_TRACE();
-                   if (sent){
-                       MS_DEBUG_DEV(
-                               "Send to OtherUdp is OK  :[%s:%d]", udpIp.c_str(), udpPort);
-                   }else{
-                       MS_THROW_TYPE_ERROR("Send to OtherUdp failed :[%s:%d]", udpIp.c_str(), udpPort);
-                   }
+                        if (err != 0)
+                            MS_THROW_ERROR("uv_ip4_addr() failed: %s", uv_strerror(err));
+
+                        break;
+                    }
+                    case AF_INET6:
+                    {
+                        err = uv_ip6_addr(udpIp.c_str(), udpPort, reinterpret_cast<struct sockaddr_in6*>(&udpaddr));
+
+                        if (err != 0)
+                            MS_THROW_ERROR("uv_ip6_addr() failed: %s", uv_strerror(err));
+
+                        break;
+                    }
+
+                    default:
+                    {
+                        MS_THROW_ERROR("unknown IP family");
+                    }
+                }
+ 
+                auto* cb = new std::function<void(bool)>([&](bool sent) {
+                    MS_TRACE();
+                    if (sent){
+                        MS_DEBUG_DEV(
+                                "Send to OtherUdp is OK  :[%s:%d]", udpIp.c_str(), udpPort);
+                    }else{
+                        MS_THROW_TYPE_ERROR("Send to OtherUdp failed :[%s:%d]", udpIp.c_str(), udpPort);
+                    }
                 });
 
                 udpSocket->Send(packet , sizeof(packet),  (const struct sockaddr*) &udpaddr, cb);
