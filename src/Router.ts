@@ -334,11 +334,84 @@ export class Router extends EnhancedEventEmitter
 		return this._channel.request('router.dump', this._internal);
 	}
 
+
+	async createWebRtcTransportForOtherUdp(
+		{
+			enableOtherUdp  = true ,
+			otherUdpIp,
+			otherUdpPort,
+			initialAvailableOutgoingBitrate = 600000,
+			enableSctp = false,
+			numSctpStreams = { OS: 1024, MIS: 1024 },
+			maxSctpMessageSize = 262144,
+			sctpSendBufferSize = 262144,
+			appData = {}
+		}: WebRtcTransportOptions
+	): Promise<WebRtcTransport>
+	{
+		logger.debug('createWebRtcTransport()');
+		 if (appData && typeof appData !== 'object')
+			throw new TypeError('if given, appData must be an object');
+
+		const internal = { ...this._internal, transportId: uuidv4() };
+		const reqData = {
+			enableOtherUdp  ,
+			otherUdpIp ,
+			otherUdpPort,
+			initialAvailableOutgoingBitrate,
+			enableSctp,
+			numSctpStreams,
+			maxSctpMessageSize,
+			sctpSendBufferSize,
+			isDataChannel : true
+		};
+
+		const data =
+			await this._channel.request('router.createWebRtcTransport', internal, reqData);
+
+		const transport = new WebRtcTransport(
+			{
+				internal,
+				data,
+				channel                  : this._channel,
+				payloadChannel           : this._payloadChannel,
+				appData,
+				getRouterRtpCapabilities : (): RtpCapabilities => this._data.rtpCapabilities,
+				getProducerById          : (producerId: string): Producer | undefined => (
+					this._producers.get(producerId)
+				),
+				getDataProducerById : (dataProducerId: string): DataProducer | undefined => (
+					this._dataProducers.get(dataProducerId)
+				)
+			});
+
+		this._transports.set(transport.id, transport);
+		transport.on('@close', () => this._transports.delete(transport.id));
+		transport.on('@newproducer', (producer: Producer) => this._producers.set(producer.id, producer));
+		transport.on('@producerclose', (producer: Producer) => this._producers.delete(producer.id));
+		transport.on('@newdataproducer', (dataProducer: DataProducer) => (
+			this._dataProducers.set(dataProducer.id, dataProducer)
+		));
+		transport.on('@dataproducerclose', (dataProducer: DataProducer) => (
+			this._dataProducers.delete(dataProducer.id)
+		));
+
+		// Emit observer event.
+		this._observer.safeEmit('newtransport', transport);
+
+		return transport;
+	}
+
+
+
+
+
 	/**
 	 * Create a WebRtcTransport.
 	 */
 	async createWebRtcTransport(
 		{
+			enableOtherUdp = false,
 			listenIps,
 			enableUdp = true,
 			enableTcp = false,
@@ -381,6 +454,7 @@ export class Router extends EnhancedEventEmitter
 
 		const internal = { ...this._internal, transportId: uuidv4() };
 		const reqData = {
+			enableOtherUdp,
 			listenIps,
 			enableUdp,
 			enableTcp,

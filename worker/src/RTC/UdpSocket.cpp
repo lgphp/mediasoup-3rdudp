@@ -17,6 +17,15 @@ namespace RTC
 		MS_TRACE();
 	}
 
+    // 连接三方udp服务器
+    UdpSocket:: UdpSocket(Listener* listener, std:string& ip , uint16_t port)
+            : // This may throw.
+            ::UdpSocket::UdpSocket(PortManager::ConnectUdp(ip , port)), listener(listener)
+    {
+        MS_TRACE();
+    }
+
+
 	UdpSocket::~UdpSocket()
 	{
 		MS_TRACE();
