@@ -243,7 +243,7 @@ namespace RTC {
 
                 // 新建udpclient 连接
                 auto *udpSocket = new RTC::UdpSocket(this, udpIp, udpPort);
-                this->udpSockets[udpSocket] = udpIp; // TODO
+                this->udpSockets[udpSocket] = udpIp; 
                 this->iceCandidates.emplace_back(udpSocket, icePriority);
 
                 //发送一个 ping 包
