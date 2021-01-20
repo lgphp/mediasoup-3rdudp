@@ -41,7 +41,6 @@ namespace RTC
         int family = Utils::IP::GetFamily(ip);
         struct sockaddr_storage bindAddr; // NOLINT(cppcoreguidelines-pro-type-member-init)
         uv_handle_t* uvHandle{ nullptr };
-        uint16_t port;
         std::string transportStr;
 
         transportStr.assign("udp");
@@ -49,7 +48,7 @@ namespace RTC
         {
             case AF_INET:
             {
-                err = uv_ip4_addr(ip.c_str(), 0, reinterpret_cast<struct sockaddr_in*>(&bindAddr));
+                err = uv_ip4_addr(ip.c_str(), port, reinterpret_cast<struct sockaddr_in*>(&bindAddr));
 
                 if (err != 0)
                     MS_THROW_ERROR("uv_ip4_addr() failed: %s", uv_strerror(err));
@@ -58,7 +57,7 @@ namespace RTC
             }
             case AF_INET6:
             {
-                err = uv_ip6_addr(ip.c_str(), 0, reinterpret_cast<struct sockaddr_in6*>(&bindAddr));
+                err = uv_ip6_addr(ip.c_str(), port, reinterpret_cast<struct sockaddr_in6*>(&bindAddr));
 
                 if (err != 0)
                     MS_THROW_ERROR("uv_ip6_addr() failed: %s", uv_strerror(err));
@@ -72,51 +71,38 @@ namespace RTC
             }
         }
 
-            // Set the   port into the sockaddr struct.
-            switch (family)
-            {
-                case AF_INET:
-                    (reinterpret_cast<struct sockaddr_in*>(&bindAddr))->sin_port = htons(port);
-                    break;
+		uvHandle = reinterpret_cast<uv_handle_t*>(new uv_udp_t());
+		err= uv_udp_init(DepLibUV::GetLoop(), reinterpret_cast<uv_udp_t*>(uvHandle));
 
-                case AF_INET6:
-                    (reinterpret_cast<struct sockaddr_in6*>(&bindAddr))->sin6_port = htons(port);
-                    break;
-            }
+		if (err != 0)
+		{
+			delete uvHandle;
+			MS_THROW_ERROR("uv_udp_init_ex() failed: %s", uv_strerror(err));
 
+		}
+		// err = uv_udp_connect(
+		// 				reinterpret_cast<uv_udp_t*>(uvHandle),
+		// 				reinterpret_cast<const struct sockaddr*>(&bindAddr) );
 
-           uvHandle = reinterpret_cast<uv_handle_t*>(new uv_udp_t());
-           err= uv_udp_init_ex(DepLibUV::GetLoop(), reinterpret_cast<uv_udp_t*>(uvHandle), UV_UDP_RECVMMSG);
+		// if (err)
+		// 		{
+		// 			MS_WARN_DEV(
+		// 					"uv_udp_connect() failed [transport:%s, ip:'%s', port:%" PRIu16 " ]: %s",
+		// 					transportStr.c_str(),
+		// 					ip.c_str(),
+		// 					port,
+		// 					uv_strerror(err));
+		// 		}
 
-            if (err != 0)
-            {
-                delete uvHandle;
-                MS_THROW_ERROR("uv_udp_init_ex() failed: %s", uv_strerror(err));
+		// // If it failed, close the handle and check the reason.
+		// if (err != 0)
+		// 	uv_close(uvHandle, static_cast<uv_close_cb>(onClose));
 
-            }
-           err = uv_udp_connect(
-                            reinterpret_cast<uv_udp_t*>(uvHandle),
-                            reinterpret_cast<const struct sockaddr*>(&bindAddr) );
-
-           if (err)
-                    {
-                        MS_WARN_DEV(
-                                "uv_udp_connect() failed [transport:%s, ip:'%s', port:%" PRIu16 " ]: %s",
-                                transportStr.c_str(),
-                                ip.c_str(),
-                                port,
-                                uv_strerror(err));
-                    }
-
-            // If it failed, close the handle and check the reason.
-            if (err != 0)
-                uv_close(reinterpret_cast<uv_handle_t*>(uvHandle), static_cast<uv_close_cb>(onClose));
-
-           MS_DEBUG_DEV(
-                "connect succeeded [transport:%s, ip:'%s', port:%" PRIu16 " ]",
-                transportStr.c_str(),
-                ip.c_str(),
-                port );
+		MS_DEBUG_DEV(
+			"connect succeeded [transport:%s, ip:'%s', port:%" PRIu16 " ]",
+			transportStr.c_str(),
+			ip.c_str(),
+			port );
 
         return static_cast<uv_handle_t*>(uvHandle);
 

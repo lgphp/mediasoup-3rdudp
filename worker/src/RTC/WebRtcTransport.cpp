@@ -40,19 +40,17 @@ namespace RTC {
             enableOtherUdp = jsonEnableOtherUdpIt->get<bool>();
         }
 
-
-        bool enableUdp{true};
-        auto jsonEnableUdpIt = data.find("enableUdp");
-        if (jsonEnableUdpIt != data.end()) {
-            if (!jsonEnableUdpIt->is_boolean())
-                MS_THROW_TYPE_ERROR("wrong enableUdp (not a boolean)");
-
-            enableUdp = jsonEnableUdpIt->get<bool>();
-        }
-
-
         //  如果不使用第三方udp
         if (!enableOtherUdp) {
+
+            bool enableUdp{true};
+            auto jsonEnableUdpIt = data.find("enableUdp");
+            if (jsonEnableUdpIt != data.end()) {
+                if (!jsonEnableUdpIt->is_boolean())
+                    MS_THROW_TYPE_ERROR("wrong enableUdp (not a boolean)");
+
+                enableUdp = jsonEnableUdpIt->get<bool>();
+            }
 
             bool enableTcp{false};
             auto jsonEnableTcpIt = data.find("enableTcp");
@@ -245,24 +243,26 @@ namespace RTC {
 
                 // 新建udpclient 连接
                 auto *udpSocket = new RTC::UdpSocket(this, udpIp, udpPort);
-                this->udpSockets[udpSocket] = udpIp;
+                this->udpSockets[udpSocket] = udpIp; // TODO
                 this->iceCandidates.emplace_back(udpSocket, icePriority);
 
 
                 //发送一个 ping 包
                 auto* packet = new uint8_t[4];
-                struct sockaddr_storage udpaddr;
-                uv_ip4_addr(ip.c_str(), 0, reinterpret_cast<struct sockaddr*>(&udpaddr));
-                reinterpret_cast<struct sockaddr*>(&udpaddr))->sin_port = htons(udpPort);
+                struct sockaddr_in udpaddr;
+                uv_ip4_addr(udpIp.c_str(), udpPort, &udpaddr);
 
-                udpSocket.Send(packet , 4,  udpaddr , [=](bool sent) { MS_TRACE();
+                auto* cb = new std::function<void(bool)>([&](bool sent) { 
+                   MS_TRACE();
                    if (sent){
                        MS_DEBUG_DEV(
-                               "Send to OtherUdp is OK  :[ip:%s]", udpaddr );
+                               "Send to OtherUdp is OK  :[%s:%d]", udpIp.c_str(), udpPort);
                    }else{
-                       MS_THROW_TYPE_ERROR("Send to OtherUdp failed :[ip:%s]", udpaddr);
+                       MS_THROW_TYPE_ERROR("Send to OtherUdp failed :[%s:%d]", udpIp.c_str(), udpPort);
                    }
                 });
+
+                udpSocket->Send(packet , sizeof(packet),  (const struct sockaddr*) &udpaddr, cb);
 
                 iceLocalPreferenceDecrement += 100;
 
